@@ -1,0 +1,202 @@
+@startuml Diagrama_ER_PosONE
+
+!theme plain
+skinparam entityFontSize 12
+skinparam attributeFontSize 11
+skinparam shadowing false
+
+title Modelo de Base de Datos - PosONE Integrador Local\n(SQLite - Hexagonal Architecture)
+
+' ============================================
+' TABLAS PRINCIPALES
+' ============================================
+
+entity "rubros" as rubro {
+  * id : INTEGER <<PK>>
+  --
+  * nombre : VARCHAR(100)
+  * activo : BOOLEAN DEFAULT 1
+}
+
+entity "articulos" as articulo {
+  * codigo : VARCHAR(20) <<PK>>
+  --
+  * descripcion : VARCHAR(200)
+  * rubro_id : INTEGER <<FK>>
+  * precio_publico : REAL
+  * precio_mayorista : REAL
+  * stock_actual : INTEGER
+  * stock_minimo : INTEGER
+  * inventario_estado : VARCHAR(10) <<BAJO|MEDIO|ALTO|BLOQUEADO>>
+  * codigo_barra : VARCHAR(50)
+  * codigo_rapido : VARCHAR(20)
+  * activo : BOOLEAN DEFAULT 1
+}
+
+entity "clientes" as cliente {
+  * id : INTEGER <<PK, AUTO>>
+  --
+  * razon_social : VARCHAR(200)
+  * cuit : VARCHAR(13) <<UNIQUE>>
+  * condicion_iva : VARCHAR(30) <<RI|CF|M|E>>
+  * direccion : VARCHAR(200)
+  * telefono : VARCHAR(50)
+  * email : VARCHAR(100)
+  * activo : BOOLEAN DEFAULT 1
+}
+
+entity "vendedores" as vendedor {
+  * id : INTEGER <<PK, AUTO>>
+  --
+  * nombre : VARCHAR(100)
+  * activo : BOOLEAN DEFAULT 1
+}
+
+' ============================================
+' CAJA
+' ============================================
+
+entity "cajas" as caja {
+  * id : INTEGER <<PK, AUTO>>
+  --
+  * vendedor_id : INTEGER <<FK>>
+  * fecha_apertura : DATETIME
+  fecha_cierre : DATETIME
+  * saldo_inicial : REAL DEFAULT 0
+  diferencia : REAL DEFAULT 0
+  * estado : VARCHAR(10) <<ABIERTA|CERRADA>>
+}
+
+' ============================================
+' COMPROBANTES
+' ============================================
+
+entity "comprobantes" as comprobante {
+  * id : INTEGER <<PK, AUTO>>
+  --
+  * tipo : VARCHAR(20) <<FACTURA_A|FACTURA_B|FACTURA_C|COTIZACION|PRESUPUESTO|NOTA_CREDITO>>
+  * punto_venta : INTEGER
+  * numero : INTEGER <<UNIQUE con punto_venta>>
+  * cliente_id : INTEGER <<FK>>
+  * vendedor_id : INTEGER <<FK>>
+  * caja_id : INTEGER <<FK>>
+  * consumidor_final : BOOLEAN DEFAULT 0
+  * lista_mayorista : BOOLEAN DEFAULT 0
+  * fecha : DATETIME
+  * subtotal : REAL
+  * descuento_pie : REAL DEFAULT 0
+  * total : REAL
+  * estado_sincronizacion : VARCHAR(15) DEFAULT 'PENDIENTE'
+  cotizacion_origen_id : INTEGER <<FK, nullable>>
+}
+
+entity "detalles_comprobante" as detalle_comp {
+  * id : INTEGER <<PK, AUTO>>
+  --
+  * comprobante_id : INTEGER <<FK>>
+  * articulo_codigo : VARCHAR(20) <<FK>>
+  * cantidad : INTEGER
+  * precio_unitario : REAL
+  * imp_int : REAL DEFAULT 0
+  * porc_dto : REAL DEFAULT 0
+  * descuento : REAL DEFAULT 0
+  * porc_alicuota : REAL DEFAULT 21.0
+  * subtotal : REAL
+}
+
+' ============================================
+' FORMAS DE PAGO
+' ============================================
+
+entity "formas_pago" as forma_pago {
+  * id : INTEGER <<PK, AUTO>>
+  --
+  * nombre : VARCHAR(50)
+  * tiene_recargo : BOOLEAN DEFAULT 0
+  * recargo_financiero : REAL DEFAULT 0
+}
+
+entity "comprobantes_formas_pago" as comp_fp {
+  * id : INTEGER <<PK, AUTO>>
+  --
+  * comprobante_id : INTEGER <<FK>>
+  * forma_pago_id : INTEGER <<FK>>
+  * monto : REAL
+  * cuotas : INTEGER DEFAULT 1
+  * lote : VARCHAR(50)
+  * nro_cupon : VARCHAR(50)
+  * recargo_financiero : REAL DEFAULT 0
+}
+
+' ============================================
+' PEDIDOS DE STOCK
+' ============================================
+
+entity "pedidos_stock" as pedido_stock {
+  * id : INTEGER <<PK, AUTO>>
+  --
+  * vendedor_id : INTEGER <<FK>>
+  * fecha : DATETIME
+  * estado : VARCHAR(10) <<PENDIENTE|ENVIADO|RECIBIDO>>
+  * estado_sincronizacion : VARCHAR(15) DEFAULT 'PENDIENTE'
+}
+
+entity "detalles_pedido_stock" as detalle_pedido {
+  * id : INTEGER <<PK, AUTO>>
+  --
+  * pedido_id : INTEGER <<FK>>
+  * articulo_codigo : VARCHAR(20) <<FK>>
+  * rubro_id : INTEGER <<FK>>
+  * cantidad : INTEGER
+  * precio_unitario : REAL
+  * total : REAL
+  * stock_actual_al_pedido : INTEGER
+  * stock_minimo : INTEGER
+  * stock_pedido : INTEGER DEFAULT 0
+  * multiplo : INTEGER DEFAULT 1
+  * inventario_estado : VARCHAR(10)
+}
+
+' ============================================
+' RELACIONES
+' ============================================
+
+rubro ||--o{ articulo
+rubro ||--o{ detalle_pedido
+
+articulo ||--o{ detalle_comp
+articulo ||--o{ detalle_pedido
+
+cliente ||--o{ comprobante
+vendedor ||--o{ comprobante
+vendedor ||--o{ caja
+vendedor ||--o{ pedido_stock
+
+caja ||--o{ comprobante
+
+comprobante ||--|{ detalle_comp
+comprobante ||--o{ comp_fp
+comprobante ||--o| comprobante : "cotizacion_origen_id"
+
+forma_pago ||--o{ comp_fp
+
+pedido_stock ||--|{ detalle_pedido
+
+note right of comprobante
+  **Índices sugeridos:**
+  - UNIQUE(punto_venta, numero, tipo)
+  - INDEX(cliente_id)
+  - INDEX(caja_id)
+  - INDEX(tipo, estado_sincronizacion)
+  - INDEX(fecha)
+end note
+
+note right of articulo
+  **Índices sugeridos:**
+  - INDEX(rubro_id)
+  - INDEX(inventario_estado)
+  - INDEX(codigo_barra) -- para búsqueda rápida
+  - INDEX(codigo_rapido)
+end note
+
+@enduml

@@ -1,0 +1,277 @@
+@startuml Diagrama_Clases_PosONE
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam defaultFontSize 11
+skinparam shadowing false
+
+title Modelo de Dominio - PosONE Integrador Local\n(version MVP con extensiones WhatsApp)
+
+' ============================================
+' ENUMERACIONES (Value Objects del Dominio)
+' ============================================
+
+enum TipoComprobante {
+  FACTURA_A
+  FACTURA_B
+  FACTURA_C
+  COTIZACION
+  PRESUPUESTO
+  NOTA_CREDITO
+}
+
+enum InventarioEstado {
+  BAJO
+  MEDIO
+  ALTO
+  BLOQUEADO
+}
+
+enum CondicionIVA {
+  RESPONSABLE_INSCRIPTO
+  CONSUMIDOR_FINAL
+  MONOTRIBUTO
+  EXENTO
+}
+
+enum EstadoCaja {
+  ABIERTA
+  CERRADA
+}
+
+enum EstadoSincronizacion {
+  PENDIENTE
+  SINCRONIZADO
+}
+
+enum EstadoPedido {
+  PENDIENTE
+  ENVIADO
+  RECIBIDO
+}
+
+' ============================================
+' ENTIDADES CORE
+' ============================================
+
+class Rubro {
+  id: int
+  nombre: str
+  activo: bool
+}
+
+class Articulo {
+  codigo: str <<PK>>
+  descripcion: str
+  rubro_id: int <<FK>>
+  precio_publico: float
+  precio_mayorista: float
+  stock_actual: int
+  stock_minimo: int
+  inventario_estado: InventarioEstado
+  codigo_barra: str
+  codigo_rapido: str
+  activo: bool
+}
+
+class Cliente {
+  id: int <<PK>>
+  razon_social: str
+  cuit: str
+  condicion_iva: CondicionIVA
+  direccion: str
+  telefono: str
+  email: str
+  activo: bool
+}
+
+class Vendedor {
+  id: int <<PK>>
+  nombre: str
+  activo: bool
+}
+
+' ============================================
+' CAJA (prerrequisito para facturar)
+' ============================================
+
+class Caja {
+  id: int <<PK>>
+  vendedor_id: int <<FK>>
+  fecha_apertura: datetime
+  fecha_cierre: datetime
+  saldo_inicial: float
+  diferencia: float
+  estado: EstadoCaja
+}
+
+' ============================================
+' COMPROBANTE (Factura/Cotización/Presupuesto/NC)
+' ============================================
+
+class Comprobante {
+  id: int <<PK>>
+  tipo: TipoComprobante
+  punto_venta: int
+  numero: int
+  cliente_id: int <<FK>>
+  vendedor_id: int <<FK>>
+  caja_id: int <<FK>>
+  consumidor_final: bool
+  lista_mayorista: bool
+  fecha: datetime
+  subtotal: float
+  descuento_pie: float
+  total: float
+  estado_sincronizacion: EstadoSincronizacion
+  cotizacion_origen_id: int <<FK nullable>>
+}
+
+class DetalleComprobante {
+  id: int <<PK>>
+  comprobante_id: int <<FK>>
+  articulo_codigo: str <<FK>>
+  cantidad: int
+  precio_unitario: float
+  imp_int: float
+  porc_dto: float
+  descuento: float
+  porc_alicuota: float
+  subtotal: float
+}
+
+' ============================================
+' FORMAS DE PAGO
+' ============================================
+
+class FormaPago {
+  id: int <<PK>>
+  nombre: str
+  tiene_recargo: bool
+  recargo_financiero: float
+}
+
+class ComprobanteFormaPago {
+  id: int <<PK>>
+  comprobante_id: int <<FK>>
+  forma_pago_id: int <<FK>>
+  monto: float
+  cuotas: int
+  lote: str
+  nro_cupon: str
+  recargo_financiero: float
+}
+
+' ============================================
+' PEDIDO DE STOCK
+' ============================================
+
+class PedidoStock {
+  id: int <<PK>>
+  vendedor_id: int <<FK>>
+  fecha: datetime
+  estado: EstadoPedido
+  estado_sincronizacion: EstadoSincronizacion
+}
+
+class DetallePedidoStock {
+  id: int <<PK>>
+  pedido_id: int <<FK>>
+  articulo_codigo: str <<FK>>
+  rubro_id: int <<FK>>
+  cantidad: int
+  precio_unitario: float
+  total: float
+  stock_actual_al_pedido: int
+  stock_minimo: int
+  stock_pedido: int
+  multiplo: int
+  inventario_estado: InventarioEstado
+}
+
+' ============================================
+' RELACIONES
+' ============================================
+
+Rubro "1" <-- "0..*" Articulo : "referenciado por (FK rubro_id)" >
+
+Articulo "1" <-- "0..*" DetalleComprobante : "referenciado por (FK articulo_codigo)" >
+Articulo "1" <-- "0..*" DetallePedidoStock : "referenciado por (FK articulo_codigo)" >
+
+Cliente "1" <-- "0..*" Comprobante : "referenciado por (FK cliente_id)" >
+Vendedor "1" <-- "0..*" Comprobante : "referenciado por (FK vendedor_id)" >
+Vendedor "1" <-- "0..*" Caja : "referenciado por (FK vendedor_id)" >
+Vendedor "1" <-- "0..*" PedidoStock : "referenciado por (FK vendedor_id)" >
+
+Caja "1" <-- "0..*" Comprobante : "referenciado por (FK caja_id)" >
+
+Comprobante "1" --> "1..*" DetalleComprobante : "contiene (FK comprobante_id)" >
+Comprobante "1" --> "0..*" ComprobanteFormaPago : "se paga con (FK comprobante_id)" >
+Comprobante "1" --> "0..1" Comprobante : "cotizacion_origen_id" >
+
+FormaPago "1" <-- "0..*" ComprobanteFormaPago : "referenciado por (FK forma_pago_id)" >
+
+PedidoStock "1" --> "1..*" DetallePedidoStock : "incluye (FK pedido_id)" >
+
+Rubro "1" <-- "0..*" DetallePedidoStock : "referenciado por (FK rubro_id)" >
+
+note top of Cliente
+  **Navegabilidad:**
+  Comprobante → Cliente (FK cliente_id)
+  El Comprobante CONOCE al Cliente.
+  El Cliente NO tiene lista de comprobantes.
+  Para buscar cotizaciones de un cliente,
+  se filtra Comprobante WHERE cliente_id = X.
+end note
+
+note right of Comprobante
+  **Regla de Negocio - Tipo por IVA:**
+  RESPONSABLE_INSCRIPTO → FACTURA_A
+  CONSUMIDOR_FINAL → FACTURA_B
+  EXENTO/MONOTRIBUTO → FACTURA_C
+  
+  **Regla de Negocio - Caja:**
+  No se puede facturar si
+  no hay una Caja ABIERTA.
+  
+  **Vendedor independiente del Cajero:**
+  Caja.vendedor_id = quien abrió la caja
+  Comprobante.vendedor_id = quien facturó
+  Pueden ser distintos.
+end note
+
+note right of Articulo
+  **Regla de Negocio - Inventario:**
+  stock_actual <= stock_minimo → BAJO
+  stock_actual == 0 → BLOQUEADO
+  No se puede facturar un 
+  artículo BLOQUEADO.
+  
+  **Precio:**
+  si lista_mayorista → usar
+  precio_mayorista
+  sino → usar precio_publico
+end note
+
+note right of ComprobanteFormaPago
+  **MVP - Solo implementado:**
+  - Efectivo
+  - Tarjeta Crédito (con cuotas)
+  
+  **Modelado pero NO implementado:**
+  - Cta.Cte
+  - Tarjeta Débito
+  - Cheque
+  - Transf. Bancaria
+end note
+
+note bottom of TipoComprobante
+  **MVP - Solo ejecutamos FACTURA_B**
+  (Consumidor Final)
+  Pero modelamos A/B/C completo.
+  COTIZACION y PRESUPUESTO sí
+  implementados para WhatsApp.
+end note
+
+@enduml
