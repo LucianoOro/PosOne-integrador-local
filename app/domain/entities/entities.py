@@ -9,6 +9,7 @@ from app.domain.value_objects.enums import (
     EstadoCaja,
     EstadoSincronizacion,
     EstadoPedido,
+    CanalOrigen,
 )
 
 
@@ -121,6 +122,7 @@ class Comprobante:
     total: float = 0.0
     estado_sincronizacion: EstadoSincronizacion = EstadoSincronizacion.PENDIENTE
     cotizacion_origen_id: Optional[int] = None
+    canal: str = CanalOrigen.WEB.value  # "WEB" or "WHATSAPP" — tracks origin of the comprobante
     detalles: list = field(default_factory=list)
     formas_pago: list = field(default_factory=list)
 

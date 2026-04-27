@@ -1,6 +1,6 @@
 """Router: Catálogo (Rubros, Formas de Pago, Vendedores)."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.application.schemas import RubroResponse, FormaPagoResponse, VendedorResponse
@@ -51,6 +51,8 @@ def listar_rubros(solo_activos: bool = Query(default=True), db: Session = Depend
 def get_rubro(rubro_id: int, db: Session = Depends(get_db)):
     use_case = _get_use_case(db)
     rubro = use_case.get_rubro(rubro_id)
+    if rubro is None:
+        raise HTTPException(status_code=404, detail="Rubro no encontrado")
     return _rubro_to_response(rubro)
 
 
@@ -67,6 +69,8 @@ def listar_formas_pago(db: Session = Depends(get_db)):
 def get_forma_pago(forma_pago_id: int, db: Session = Depends(get_db)):
     use_case = _get_use_case(db)
     fp = use_case.get_forma_pago(forma_pago_id)
+    if fp is None:
+        raise HTTPException(status_code=404, detail="Forma de pago no encontrada")
     return _forma_pago_to_response(fp)
 
 
@@ -83,4 +87,6 @@ def listar_vendedores(solo_activos: bool = Query(default=True), db: Session = De
 def get_vendedor(vendedor_id: int, db: Session = Depends(get_db)):
     use_case = _get_use_case(db)
     vendedor = use_case.get_vendedor(vendedor_id)
+    if vendedor is None:
+        raise HTTPException(status_code=404, detail="Vendedor no encontrado")
     return _vendedor_to_response(vendedor)

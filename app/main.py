@@ -4,8 +4,11 @@ Configura FastAPI con CORS, lifespan (seed data), routers
 y manejador de excepciones de dominio.
 """
 
+import logging
+import os
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -20,17 +23,53 @@ from app.infrastructure.api.routers.cajas_router import router as cajas_router
 from app.infrastructure.api.routers.comprobantes_router import router as comprobantes_router
 from app.infrastructure.api.routers.catalogo_router import router as catalogo_router
 from app.infrastructure.api.routers.pedidos_stock_router import router as pedidos_router
+from app.infrastructure.api.routers.whatsapp_router import router as whatsapp_router
+from app.infrastructure.api.routers.whatsapp_api_router import router as whatsapp_api_router
+
+logger = logging.getLogger(__name__)
+
+# Cargar variables de entorno desde .env
+# Buscar explícitamente en el directorio del proyecto para mayor robustez
+from pathlib import Path
+_env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(_env_path, override=True)
+
+
+def _validate_env_vars() -> None:
+    """Valida que las variables de entorno críticas estén configuradas.
+    Warn si faltan, pero no crashea (para permitir desarrollo sin credenciales).
+    """
+    warnings = []
+
+    if not os.environ.get("OPENAI_API_KEY") and not os.environ.get("AI_API_KEY"):
+        warnings.append("OPENAI_API_KEY / AI_API_KEY no configurado — el asistente de IA no funcionará")
+
+    if not os.environ.get("TWILIO_ACCOUNT_SID"):
+        warnings.append("TWILIO_ACCOUNT_SID no configurado — los mensajes WhatsApp no se enviarán")
+
+    if not os.environ.get("TWILIO_AUTH_TOKEN"):
+        warnings.append("TWILIO_AUTH_TOKEN no configurado — los mensajes WhatsApp no se enviarán")
+
+    if not os.environ.get("TWILIO_PHONE_NUMBER"):
+        warnings.append("TWILIO_PHONE_NUMBER no configurado — los mensajes WhatsApp no se enviarán")
+
+    for warning in warnings:
+        logger.warning("⚠️  %s", warning)
+
+    if not warnings:
+        logger.info("✅ Todas las variables de entorno están configuradas")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: crea tablas y pobla datos iniciales."""
+    """Startup: crea tablas, pobla datos iniciales y valida env vars."""
     create_tables()
     db = SessionLocal()
     try:
         seed_database(db)
     finally:
         db.close()
+    _validate_env_vars()
     yield
 
 
@@ -88,3 +127,5 @@ app.include_router(cajas_router)
 app.include_router(comprobantes_router)
 app.include_router(catalogo_router)
 app.include_router(pedidos_router)
+app.include_router(whatsapp_router)
+app.include_router(whatsapp_api_router)

@@ -16,8 +16,8 @@ class TipoComprobante(str, Enum):
 
     @classmethod
     def desconta_stock(cls, tipo: "TipoComprobante") -> bool:
-        """Solo las facturas y notas de crédito afectan stock."""
-        return tipo in (cls.FACTURA_A, cls.FACTURA_B, cls.FACTURA_C, cls.NOTA_CREDITO)
+        """Solo las facturas afectan stock. Las notas de crédito restauran stock (operación separada)."""
+        return tipo in (cls.FACTURA_A, cls.FACTURA_B, cls.FACTURA_C)
 
 
 class InventarioEstado(str, Enum):
@@ -75,3 +75,9 @@ class EstadoPedido(str, Enum):
     PENDIENTE = "PENDIENTE"
     ENVIADO = "ENVIADO"
     RECIBIDO = "RECIBIDO"
+
+
+class CanalOrigen(str, Enum):
+    """Canal de origen del comprobante."""
+    WEB = "WEB"
+    WHATSAPP = "WHATSAPP"

@@ -22,7 +22,7 @@ from app.domain.exceptions import (
     CotizacionYaConvertidaError,
     TipoComprobanteInvalidoError,
 )
-from app.domain.value_objects.enums import TipoComprobante, EstadoSincronizacion
+from app.domain.value_objects.enums import TipoComprobante, EstadoSincronizacion, CanalOrigen
 
 
 class ComprobanteUseCase:
@@ -144,6 +144,7 @@ class ComprobanteUseCase:
             lista_mayorista=cotizacion.lista_mayorista,
             descuento_pie=cotizacion.descuento_pie,
             cotizacion_origen_id=cotizacion.id,
+            canal=cotizacion.canal,  # Preserve origin channel
             detalles=[],
             formas_pago=[],
         )
@@ -155,7 +156,7 @@ class ComprobanteUseCase:
                 cantidad=det.cantidad,
                 porc_dto=det.porc_dto,
                 imp_int=det.imp_int,
-                porc_alicuota=det.porc_alicota,
+                porc_alicuota=det.porc_alicuota,
             ))
 
         # Copiar formas de pago

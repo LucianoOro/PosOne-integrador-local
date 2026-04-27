@@ -2,3 +2,16 @@ venv/
 __pycache__/
 *.pyc
 posone.db
+.env
+
+# Documentación de demo y estudio (no se sube al repo)
+Documentacion/
+
+# Test scripts (no se suben al repo)
+test_api.py
+test_completo.py
+test_caja_functions.py
+test_groq_models.py
+
+# Documentación del agente IA (no se sube al repo)
+DOCUMENTACION_AGENTE_BACKEND.md

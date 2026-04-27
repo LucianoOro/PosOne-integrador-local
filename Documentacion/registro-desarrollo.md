@@ -171,49 +171,95 @@ Se probaron TODOS los endpoints principales:
 
 ---
 
-## Fase 5: Generación de PDF 🔲
+## Fase 5: Generación de PDF ✅
 
-**Estado**: Pendiente. Próxima fase a implementar.
+### Tarea 5.1 — Servicio FPDF2 para generación de PDFs
+- **Archivo**: `app/infrastructure/pdf/comprobante_pdf.py`
+- **Qué se hizo**: Clase `ComprobantePDFService` que genera PDFs estilo AFIP con:
+  - Header de empresa (PosONE, dirección, fecha, vendedor)
+  - Header de comprobante (tipo + número correlativo)
+  - Datos del cliente (razón social, CUIT, condición IVA)
+  - Tabla de items (código, descripción, cantidad, precio unitario, % dto, subtotal)
+  - Sección de totales (subtotal, descuento, total)
+  - Formas de pago con recargo financiero
+  - Footer con warnings legales según tipo de comprobante (cotización = "Sin valor fiscal")
+  - Sanitización de caracteres para Helvetica (acríticos, ñ → n)
+- **Por qué**: Los PDFs son necesarios para enviar cotizaciones por WhatsApp y permitir descargas desde la web.
+- **Decisión**: Se usó FPDF2 con layout fiscal argentino. La clase `_ComprobantePDF` es interna y `ComprobantePDFService` es la fachada pública.
 
-**Plan**:
-- 5.1: Servicio FPDF2 para generar PDF de cotización y factura
-- 5.2: Endpoint `/comprobantes/{id}/pdf`
-- 5.3: Integrar en caso de uso `ComprobanteUseCase`
+### Tarea 5.2 — Endpoint GET `/comprobantes/{id}/pdf`
+- **Archivo**: `app/infrastructure/api/routers/comprobantes_router.py`
+- **Qué se hizo**: Endpoint que recibe un ID de comprobante, resuelve nombres (cliente, vendedor, artículos, formas de pago), genera el PDF y lo devuelve como descarga con `Content-Disposition`.
+- **Por qué**: Permite al frontend y a WhatsApp descargar/imprimir comprobantes.
+
+### Tarea 5.3 — Integración en MessageProcessor
+- **Archivo**: `app/infrastructure/whatsapp/message_processor.py`
+- **Qué se hizo**: Al generarse una cotización por WhatsApp, se envía automáticamente el PDF vía Twilio.
+- **Por qué**: El flujo completo: usuario cotiza por WhatsApp → Gemini genera → se envía PDF adjunto.
 
 ---
 
-## Fase 6: WhatsApp Webhook 🔲
+## Fase 6: WhatsApp Webhook ✅
 
-**Estado**: Pendiente.
+### Tarea 6.1 — Webhook endpoint para Twilio
+- **Archivo**: `app/infrastructure/api/routers/whatsapp_router.py`
+- **Qué se hizo**: Endpoint POST `/webhook` que recibe form-data de Twilio con `From` y `Body`, limpia el prefijo `whatsapp:`, y procesa el mensaje a través de `MessageProcessor`. Retorna TwiML vacío (la respuesta se envía vía API).
+- **Por qué**: Twilio WhatsApp Business envía webhooks con los mensajes entrantes.
 
-**Plan**:
-- 6.1: Webhook endpoint para recibir mensajes de Twilio
-- 6.2: Message processor para parsear intenciones
-- 6.3: Respuestas formateadas
-- 6.4: Envío de PDF por WhatsApp (Twilio Media)
+### Tarea 6.2 — MessageProcessor con Gemini + fallback
+- **Archivo**: `app/infrastructure/whatsapp/message_processor.py`
+- **Qué se hizo**: Clase `MessageProcessor` que orquesta el flujo completo: recibe mensaje → procesa con Gemini → devuelve respuesta → si hay cotización, envía PDF. Si Gemini no está configurado o da error 429, usa `FallbackProcessor` rule-based.
+- **Por qué**: Permitir doble vía: IA inteligente con fallback determinista.
+
+### Tarea 6.3 — FallbackProcessor (rule-based)
+- **Archivo**: `app/infrastructure/whatsapp/fallback_processor.py`
+- **Qué se hizo**: Procesador que funciona sin IA usando pattern matching: saludo, stock, precio, clientes, cotizacionespendientes, bloquear/desbloquear artículos, consultar caja, convertir cotización. Singularización simple (bicicletas → bicicleta).
+- **Por qué**: Garantizar respuesta cuando Gemini no está disponible o se agota la cuota.
+
+### Tarea 6.4 — TwilioService
+- **Archivo**: `app/infrastructure/whatsapp/twilio_service.py`
+- **Qué se hizo**: Servicio que encapsula el envío de mensajes de texto y PDFs por WhatsApp usando la API de Twilio. Si no hay URL pública para el PDF, envía texto alternativo.
+- **Por qué**: Abstracción limpia para el envío por WhatsApp. Twilio requiere URLs públicas para medios.
+
+### Tarea 6.5 — API directa para testing
+- **Archivo**: `app/infrastructure/api/routers/whatsapp_api_router.py`
+- **Qué se hizo**: Endpoints REST que exponen las mismas funciones que el agente de IA, pero con llamadas directas: `/whatsapp/chat` (con IA), `/whatsapp/consultar-stock`, `/whatsapp/buscar-articulos`, `/whatsapp/consultar-precio`, `/whatsapp/buscar-clientes`, `/whatsapp/cotizaciones-pendientes`, `/whatsapp/generar-cotizacion`, `/whatsapp/convertir-cotizacion`, `/whatsapp/bloquear-articulo`, `/whatsapp/desbloquear-articulo`, `/whatsapp/consultar-caja`
+- **Por qué**: Permite probar el flujo completo sin Twilio, directamente desde la API.
 
 ---
 
-## Fase 7: Gemini Function Calling 🔲
+## Fase 7: Gemini Function Calling ✅
 
-**Estado**: Pendiente.
+### Tarea 7.1 — Configuración de API key
+- **Archivo**: `.env`
+- **Qué se hizo**: Se carga `GEMINI_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `APP_BASE_URL` desde `.env` usando `python-dotenv`. Validación al arranque (warn si faltan, no crashea).
+- **Por qué**: Permite desarrollo sin credenciales configuradas.
 
-**Plan**:
-- 7.1: Configurar API key de Google AI Studio
-- 7.2: Definir function declarations
-- 7.3: Servicio Gemini que orquesta: mensaje → Gemini → función → caso de uso → respuesta
-- 7.4: Integrar en message_processor reemplazando parser manual
+### Tarea 7.2 — Function declarations para Gemini
+- **Archivo**: `app/infrastructure/ai/gemini_functions.py`
+- **Qué se hizo**: 9 function declarations para Gemini: `buscar_articulos`, `consultar_stock`, `consultar_precio`, `buscar_clientes`, `cotizaciones_pendientes`, `convertir_cotizacion`, `bloquear_articulo`, `desbloquear_articulo`, `generar_cotizacion`, `consultar_caja`. Incluye SYSTEM_INSTRUCTION con reglas de comportamiento (actuá sin pedir confirmación, usá funciones, respondé en rioplatense, etc.).
+- **Por qué**: Gemini usa function calling para ejecutar acciones del sistema POS en vez de responder con texto genérico.
+
+### Tarea 7.3 — Servicio Gemini con fallback chain
+- **Archivo**: `app/infrastructure/ai/gemini_service.py`
+- **Qué se hizo**: `GeminiService` con cadena de modelos fallback (gemini-2.5-flash → gemini-2.5-flash-lite → gemini-3-flash-preview → gemini-3.1-flash-lite-preview). Procesa mensaje → Gemini invoca función → ejecuta caso de uso → devuelve resultado a Gemini → respuesta en lenguaje natural. Tracking de side effects (cotizacion_id, comprobante_id) para envío de PDF.
+- **BUG ENCONTRADO Y CORREGIDO**: `_process_with_model()` llamaba `self._build_contents()` redundantemente reconstruyendo el historial. Se eliminó esa llamada puesto que `contents` ya viene construido desde `process_message()`.
+- **Por qué**: La cadena de modelos evita que la cuota gratuita de un modelo bloquee todo el sistema.
+
+### Tarea 7.4 — Integración en MessageProcessor
+- **Archivo**: `app/infrastructure/whatsapp/message_processor.py`
+- **Qué se hizo**: `MessageProcessor` usa `GeminiService` como path principal y `FallbackProcessor` como fallback automático. Si Gemini no está configurado o da error 429, cae al rule-based.
+- **Por qué**: Doble vía garantiza disponibilidad 24/7.
 
 ---
 
 ## Fase 8: Chat Web 🔲
 
-**Estado**: Pendiente.
+**Estado**: Parcialmente implementado. El endpoint `/whatsapp/chat` sirve como API directa para chat con IA.
 
-**Plan**:
-- 8.1: Endpoint POST `/api/chat/message`
-- 8.2: Frontend HTML/JS mínimo con interfaz de chat
-- 8.3: Servir estáticos desde FastAPI
+**Pendiente**:
+- 8.1: Frontend HTML/JS mínimo con interfaz de chat (input + historial)
+- 8.2: Servir estáticos desde FastAPI
 
 ---
 
@@ -243,14 +289,38 @@ Se probaron TODOS los endpoints principales:
 | 5 | Detalles y formas de pago se persisten manualmente en ComprobanteRepository.save() | SQLAlchemy cascade delete-orphan no se lleva bien con nuestra lógica de dominio | F3 |
 | 6 | Router instancian repos y use cases inline (sin DI container) | MVP: explícito y simple. Si crece, se agrega DI | F4 |
 | 7 | Se creó `ArticuloRepository.search()` con OR + ilike | Búsqueda flexible por código, descripción, barra y rápido en una sola query (D11) | F3 |
+| 8 | Se añadió campo `canal` a Comprobante | Rastrear origen del comprobante (WEB vs WHATSAPP) | F6 |
+| 9 | Se creó FallbackProcessor rule-based | Garantizar funcionamiento sin IA; alternativa cuando Gemini no está disponible o se agota la cuota | F6 |
+| 10 | Se creó whatsapp_api_router con endpoints directos | Permitir testing sin Twilio; sirve como API directa para desarrollo | F6 |
+| 11 | Se implementó cadena de modelos fallback en GeminiService | Evitar bloqueo por cuota; si un modelo falla con 429, prueba el siguiente | F7 |
+| 12 | Se modificó NOTA_CREDITO: desconta_stock → False | Una NC no descuenta stock; el bug original hacía que descontara sin verificar caja | Bugfix |
+| 13 | Se añadieron `_resolve_nombres()` en routers de artículos, cajas y pedidos_stock | Campos como rubro_nombre, vendedor_nombre, articulo_descripcion venían null | Bugfix |
+| 14 | Endpoints de catálogo retornan 404 en vez de null | /catalogo/rubros/{id}, /catalogo/formas-pago/{id}, /catalogo/vendedores/{id} ahora devuelven HTTPException(404) cuando no encuentran el recurso | Bugfix |
+| 15 | Se corrigió bug en GeminiService._process_with_model() | Eliminada llamada redundante a _build_contents() que reconstruía el historial perdiendo function calls previas | Bugfix |
 
 ---
 
-## Decisiones Técnicas Pendientes (para Fases 5-9)
+## Decisiones Técnicas Pendientes (para Fases 8-9)
 
-| # | Decisión | Opciones | Inclinación |
-|---|----------|----------|-------------|
-| D1-PDF | Formato del PDF | Tabla simple vs diseño profesional | Tabla simple primero, iterar si hay tiempo |
-| D2-WA | Procesamiento de mensajes | Parser manual vs Gemini directo | Gemini con function calling (F7), parser simple como fallback (F6) |
-| D3-Chat | Frontend | HTML/JS mínimo vs React vs Vercel AI | HTML/JS servido por FastAPI (más simple) |
-| D4-Deploy | Hospedaje | Local + ngrok vs Railway/Render | Local + ngrok para la demo |
+| # | Decisión | Opciones | Inclinación | Estado |
+|---|----------|----------|-------------|--------|
+| D1-PDF | Formato del PDF | Tabla simple vs diseño profesional | Tabla simple primero, iterar si hay tiempo | ✅ Resuelta: tabla simple estilo AFIP |
+| D2-WA | Procesamiento de mensajes | Parser manual vs Gemini directo | Gemini con function calling (F7), parser simple como fallback (F6) | ✅ Resuelta: Gemini + FallbackProcessor |
+| D3-Chat | Frontend | HTML/JS mínimo vs React vs Vercel AI | HTML/JS servido por FastAPI (más simple) | 🔲 Pendiente |
+| D4-Deploy | Hospedaje | Local + ngrok vs Railway/Render | Local + ngrok para la demo | 🔲 Pendiente |
+
+---
+
+## Estado Actual
+
+| Fase | Estado | Notas |
+|------|--------|-------|
+| Fase 1: Dominio Puro | ✅ Completada | enums, entidades, excepciones |
+| Fase 2: Infraestructura de Datos | ✅ Completada | models, connection, seed |
+| Fase 3: Puertos y Repositorios | ✅ Completada | 8 puertos + 8 implementaciones |
+| Fase 4: Casos de Uso + API | ✅ Completada | 6 use cases, 6 routers, main.py |
+| Fase 5: Generación de PDF | ✅ Completada | ComprobantePDFService, endpoint /comprobantes/{id}/pdf |
+| Fase 6: WhatsApp Webhook | ✅ Completada | MessageProcessor, TwilioService, FallbackProcessor, webhook + API endpoints |
+| Fase 7: Gemini Integration | ✅ Completada | GeminiService con fallback chain, 9 function declarations |
+| Fase 8: Chat Web | 🔲 Parcial | API directa implementada, falta interfaz HTML/JS |
+| Fase 9: Testing y Deploy | 🔲 Pendiente | Tests de integración, ngrok, script demo |

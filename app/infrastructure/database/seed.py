@@ -3,6 +3,8 @@
 Se ejecuta en el evento de lifespan de FastAPI (main.py).
 """
 
+from datetime import datetime
+
 from sqlalchemy.orm import Session
 
 from app.infrastructure.database.models import (
@@ -12,6 +14,8 @@ from app.infrastructure.database.models import (
     VendedorModel,
     CajaModel,
     FormaPagoModel,
+    ComprobanteModel,
+    DetalleComprobanteModel,
 )
 from app.domain.value_objects.enums import (
     CondicionIVA,
@@ -34,7 +38,7 @@ def seed_database(db: Session) -> None:
     db.add_all([rubro_bicicletas, rubro_repuestos, rubro_indumentaria, rubro_componentes])
     db.flush()
 
-    # ─── Artículos (10 variados) ─────────────────────────────
+    # ─── Artículos (20) ──────────────────────────────────────
     articulos = [
         ArticuloModel(
             codigo="BIC-001", descripcion="Bicicleta Mountain Bike Ranger 29",
@@ -55,9 +59,21 @@ def seed_database(db: Session) -> None:
             codigo_barra="7791234567892", codigo_rapido="BUCL", activo=True,
         ),
         ArticuloModel(
+            codigo="BIC-004", descripcion="Bicicleta Eléctrica E-City 500",
+            rubro_id=1, precio_publico=1200000.0, precio_mayorista=980000.0,
+            stock_actual=2, stock_minimo=2, inventario_estado="BAJO",
+            codigo_barra="7791234567893", codigo_rapido="BEC5", activo=True,
+        ),
+        ArticuloModel(
+            codigo="BIC-005", descripcion="Bicicleta Plegable Urban Fold 20",
+            rubro_id=1, precio_publico=320000.0, precio_mayorista=265000.0,
+            stock_actual=7, stock_minimo=3, inventario_estado="MEDIO",
+            codigo_barra="7791234567894", codigo_rapido="BUF2", activo=True,
+        ),
+        ArticuloModel(
             codigo="REP-001", descripcion="Casco de Seguridad ProRider",
             rubro_id=2, precio_publico=45000.0, precio_mayorista=35000.0,
-            stock_actual=25, stock_minimo=10, inventario_estado="ALTO",
+            stock_actual=0, stock_minimo=10, inventario_estado="BLOQUEADO",
             codigo_barra="7799876543210", codigo_rapido="CSPR", activo=True,
         ),
         ArticuloModel(
@@ -75,8 +91,26 @@ def seed_database(db: Session) -> None:
         ArticuloModel(
             codigo="REP-004", descripcion="Asiento Ergonómico Gel Classic",
             rubro_id=2, precio_publico=28000.0, precio_mayorista=22000.0,
-            stock_actual=2, stock_minimo=5, inventario_estado="BAJO",
+            stock_actual=0, stock_minimo=5, inventario_estado="BLOQUEADO",
             codigo_barra="7799876543213", codigo_rapido="ASEG", activo=True,
+        ),
+        ArticuloModel(
+            codigo="REP-005", descripcion="Luces LED Recargables 1200lm",
+            rubro_id=2, precio_publico=42000.0, precio_mayorista=33000.0,
+            stock_actual=18, stock_minimo=8, inventario_estado="ALTO",
+            codigo_barra="7799876543214", codigo_rapido="LLR1", activo=True,
+        ),
+        ArticuloModel(
+            codigo="REP-006", descripcion="Porta Bidón Aluminio Pro",
+            rubro_id=2, precio_publico=12000.0, precio_mayorista=9000.0,
+            stock_actual=40, stock_minimo=15, inventario_estado="ALTO",
+            codigo_barra="7799876543215", codigo_rapido="PBAP", activo=True,
+        ),
+        ArticuloModel(
+            codigo="REP-007", descripcion="Inflador Portátil Zefal",
+            rubro_id=2, precio_publico=18000.0, precio_mayorista=14000.0,
+            stock_actual=22, stock_minimo=10, inventario_estado="ALTO",
+            codigo_barra="7799876543216", codigo_rapido="IPZ1", activo=True,
         ),
         ArticuloModel(
             codigo="IND-001", descripcion="Campera Térmica WindBlock Pro",
@@ -91,16 +125,46 @@ def seed_database(db: Session) -> None:
             codigo_barra="7795554443333", codigo_rapido="GCSG", activo=True,
         ),
         ArticuloModel(
+            codigo="IND-003", descripcion="Jersey Cycling Team Edition",
+            rubro_id=3, precio_publico=65000.0, precio_mayorista=52000.0,
+            stock_actual=10, stock_minimo=5, inventario_estado="MEDIO",
+            codigo_barra="7795554443334", codigo_rapido="JCTE", activo=True,
+        ),
+        ArticuloModel(
+            codigo="IND-004", descripcion="Calza Ciclismo Comfort Pro",
+            rubro_id=3, precio_publico=38000.0, precio_mayorista=30000.0,
+            stock_actual=15, stock_minimo=8, inventario_estado="ALTO",
+            codigo_barra="7795554443335", codigo_rapido="CCCP", activo=True,
+        ),
+        ArticuloModel(
+            codigo="IND-005", descripcion="Zapatillas SPD Race Carbon",
+            rubro_id=3, precio_publico=145000.0, precio_mayorista=118000.0,
+            stock_actual=3, stock_minimo=3, inventario_estado="BAJO",
+            codigo_barra="7795554443336", codigo_rapido="ZSRC", activo=True,
+        ),
+        ArticuloModel(
             codigo="CMP-001", descripcion="Grupo Shimano Deore 12V",
             rubro_id=4, precio_publico=180000.0, precio_mayorista=150000.0,
             stock_actual=1, stock_minimo=2, inventario_estado="BAJO",
             codigo_barra="7791112223334", codigo_rapido="GSD12", activo=True,
         ),
+        ArticuloModel(
+            codigo="CMP-002", descripcion="Frenos Disco Hidráulico Shimano",
+            rubro_id=4, precio_publico=95000.0, precio_mayorista=78000.0,
+            stock_actual=4, stock_minimo=3, inventario_estado="BAJO",
+            codigo_barra="7791112223335", codigo_rapido="FDH1", activo=True,
+        ),
+        ArticuloModel(
+            codigo="CMP-003", descripcion="Rueda Trasera Refuerzo Pro",
+            rubro_id=4, precio_publico=75000.0, precio_mayorista=61000.0,
+            stock_actual=6, stock_minimo=4, inventario_estado="MEDIO",
+            codigo_barra="7791112223336", codigo_rapido="RTR1", activo=True,
+        ),
     ]
     db.add_all(articulos)
     db.flush()
 
-    # ─── Clientes ─────────────────────────────────────────────
+    # ─── Clientes (6) ─────────────────────────────────────────
     clientes = [
         ClienteModel(
             id=1, razon_social="Consumidor Final",
@@ -119,13 +183,35 @@ def seed_database(db: Session) -> None:
             direccion="Belgrano 340, San Rafael", telefono="2614333222",
             email="jperez@bicicleteras.com", activo=True,
         ),
+        ClienteModel(
+            id=4, razon_social="Ciclo Aventura SA",
+            cuit="30567890123", condicion_iva=CondicionIVA.RESPONSABLE_INSCRIPTO.value,
+            direccion="Las Heras 580, Godoy Cruz", telefono="2614888999",
+            email="info@cicloaventura.com", activo=True,
+        ),
+        ClienteModel(
+            id=5, razon_social="Bike Shop Rodríguez",
+            cuit="20234567891", condicion_iva=CondicionIVA.MONOTRIBUTO.value,
+            direccion="San Martín 220, Mendoza", telefono="2614777666",
+            email="ventas@bikeshop.com", activo=True,
+        ),
+        ClienteModel(
+            id=6, razon_social="Deportes del Sur SRL",
+            cuit="30111222333", condicion_iva=CondicionIVA.RESPONSABLE_INSCRIPTO.value,
+            direccion="España 890, Mendoza", telefono="2614111222",
+            email="compras@deportessur.com", activo=True,
+        ),
     ]
     db.add_all(clientes)
     db.flush()
 
-    # ─── Vendedor (1 default) ─────────────────────────────────
-    vendedor = VendedorModel(id=1, nombre="Vendedor Default", activo=True)
-    db.add(vendedor)
+    # ─── Vendedores (3) ───────────────────────────────────────
+    vendedores = [
+        VendedorModel(id=1, nombre="Ana Rodríguez", activo=True),
+        VendedorModel(id=2, nombre="Lucía Martínez", activo=True),
+        VendedorModel(id=3, nombre="Carlos Gómez", activo=True),
+    ]
+    db.add_all(vendedores)
     db.flush()
 
     # ─── Formas de Pago (6) ──────────────────────────────────
@@ -136,7 +222,7 @@ def seed_database(db: Session) -> None:
         ),
         FormaPagoModel(
             id=2, nombre="Tarjeta CRÉDITO",
-            tiene_recargo=True, recargo_financiero=12.0,  # % anual aproximado
+            tiene_recargo=True, recargo_financiero=12.0,
         ),
         FormaPagoModel(
             id=3, nombre="Tarjeta DÉBITO",
@@ -159,9 +245,124 @@ def seed_database(db: Session) -> None:
 
     # ─── Caja inicial abierta ──────────────────────────────────
     caja = CajaModel(
-        id=1, vendedor_id=1, saldo_inicial=0.0,
+        id=1, vendedor_id=1, saldo_inicial=50000.0,
         diferencia=0.0, estado=EstadoCaja.ABIERTA.value,
     )
     db.add(caja)
+    db.flush()
+
+    # ─── Comprobantes históricos ────────────────────────────────
+    comprobante_1 = ComprobanteModel(
+        tipo="FACTURA_B", punto_venta=1, numero=1,
+        cliente_id=1, vendedor_id=1, caja_id=1,
+        consumidor_final=True, lista_mayorista=False,
+        fecha=datetime(2026, 4, 27, 9, 30, 0),
+        subtotal=324000.0, descuento_pie=0.0, total=324000.0,
+        estado_sincronizacion="SINCRONIZADO", canal="WEB",
+    )
+    comprobante_2 = ComprobanteModel(
+        tipo="FACTURA_B", punto_venta=1, numero=2,
+        cliente_id=2, vendedor_id=2, caja_id=1,
+        consumidor_final=False, lista_mayorista=True,
+        fecha=datetime(2026, 4, 27, 10, 15, 0),
+        subtotal=872000.0, descuento_pie=0.0, total=872000.0,
+        estado_sincronizacion="SINCRONIZADO", canal="WEB",
+    )
+    comprobante_3 = ComprobanteModel(
+        tipo="COTIZACION", punto_venta=1, numero=3,
+        cliente_id=4, vendedor_id=1, caja_id=1,
+        consumidor_final=False, lista_mayorista=False,
+        fecha=datetime(2026, 4, 27, 11, 0, 0),
+        subtotal=1010000.0, descuento_pie=0.0, total=1010000.0,
+        estado_sincronizacion="PENDIENTE", canal="WHATSAPP",
+    )
+    comprobante_4 = ComprobanteModel(
+        tipo="COTIZACION", punto_venta=1, numero=4,
+        cliente_id=5, vendedor_id=3, caja_id=1,
+        consumidor_final=False, lista_mayorista=True,
+        fecha=datetime(2026, 4, 27, 11, 30, 0),
+        subtotal=885000.0, descuento_pie=0.0, total=885000.0,
+        estado_sincronizacion="PENDIENTE", canal="WHATSAPP",
+    )
+    comprobante_5 = ComprobanteModel(
+        tipo="FACTURA_B", punto_venta=1, numero=5,
+        cliente_id=3, vendedor_id=2, caja_id=1,
+        consumidor_final=False, lista_mayorista=False,
+        fecha=datetime(2026, 4, 27, 12, 45, 0),
+        subtotal=310000.0, descuento_pie=0.0, total=310000.0,
+        estado_sincronizacion="SINCRONIZADO", canal="WEB",
+    )
+    db.add_all([comprobante_1, comprobante_2, comprobante_3, comprobante_4, comprobante_5])
+    db.flush()
+
+    # ─── Detalles de comprobantes ───────────────────────────────
+    detalles = [
+        # Comprobante 1: FACTURA_B consumidor final
+        DetalleComprobanteModel(
+            comprobante_id=comprobante_1.id, articulo_codigo="BIC-003",
+            cantidad=1, precio_unitario=280000.0,
+            imp_int=0.0, porc_dto=0.0, descuento=0.0,
+            porc_alicuota=21.0, subtotal=280000.0,
+        ),
+        DetalleComprobanteModel(
+            comprobante_id=comprobante_1.id, articulo_codigo="REP-003",
+            cantidad=2, precio_unitario=22000.0,
+            imp_int=0.0, porc_dto=0.0, descuento=0.0,
+            porc_alicuota=21.0, subtotal=44000.0,
+        ),
+        # Comprobante 2: FACTURA_B mayorista
+        DetalleComprobanteModel(
+            comprobante_id=comprobante_2.id, articulo_codigo="BIC-001",
+            cantidad=2, precio_unitario=380000.0,
+            imp_int=0.0, porc_dto=0.0, descuento=0.0,
+            porc_alicuota=21.0, subtotal=760000.0,
+        ),
+        DetalleComprobanteModel(
+            comprobante_id=comprobante_2.id, articulo_codigo="REP-002",
+            cantidad=4, precio_unitario=28000.0,
+            imp_int=0.0, porc_dto=0.0, descuento=0.0,
+            porc_alicuota=21.0, subtotal=112000.0,
+        ),
+        # Comprobante 3: COTIZACION pública
+        DetalleComprobanteModel(
+            comprobante_id=comprobante_3.id, articulo_codigo="BIC-001",
+            cantidad=1, precio_unitario=450000.0,
+            imp_int=0.0, porc_dto=0.0, descuento=0.0,
+            porc_alicuota=21.0, subtotal=450000.0,
+        ),
+        DetalleComprobanteModel(
+            comprobante_id=comprobante_3.id, articulo_codigo="BIC-003",
+            cantidad=2, precio_unitario=280000.0,
+            imp_int=0.0, porc_dto=0.0, descuento=0.0,
+            porc_alicuota=21.0, subtotal=560000.0,
+        ),
+        # Comprobante 4: COTIZACION mayorista
+        DetalleComprobanteModel(
+            comprobante_id=comprobante_4.id, articulo_codigo="BIC-002",
+            cantidad=1, precio_unitario=720000.0,
+            imp_int=0.0, porc_dto=0.0, descuento=0.0,
+            porc_alicuota=21.0, subtotal=720000.0,
+        ),
+        DetalleComprobanteModel(
+            comprobante_id=comprobante_4.id, articulo_codigo="REP-005",
+            cantidad=5, precio_unitario=33000.0,
+            imp_int=0.0, porc_dto=0.0, descuento=0.0,
+            porc_alicuota=21.0, subtotal=165000.0,
+        ),
+        # Comprobante 5: FACTURA_B pública
+        DetalleComprobanteModel(
+            comprobante_id=comprobante_5.id, articulo_codigo="IND-002",
+            cantidad=5, precio_unitario=18000.0,
+            imp_int=0.0, porc_dto=0.0, descuento=0.0,
+            porc_alicuota=21.0, subtotal=90000.0,
+        ),
+        DetalleComprobanteModel(
+            comprobante_id=comprobante_5.id, articulo_codigo="REP-003",
+            cantidad=10, precio_unitario=22000.0,
+            imp_int=0.0, porc_dto=0.0, descuento=0.0,
+            porc_alicuota=21.0, subtotal=220000.0,
+        ),
+    ]
+    db.add_all(detalles)
 
     db.commit()

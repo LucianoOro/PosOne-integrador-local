@@ -124,6 +124,7 @@ class ComprobanteModel(Base):
     total = Column(Float, nullable=False, default=0.0)
     estado_sincronizacion = Column(String(15), nullable=False, default="PENDIENTE")
     cotizacion_origen_id = Column(Integer, ForeignKey("comprobantes.id"), nullable=True)
+    canal = Column(String(20), default="WEB", nullable=False)
 
     cliente = relationship("ClienteModel", back_populates="comprobantes")
     vendedor = relationship("VendedorModel", back_populates="comprobantes")

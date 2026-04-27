@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.application.ports.comprobante_repository import ComprobanteRepository
 from app.domain.entities.entities import Comprobante, DetalleComprobante, ComprobanteFormaPago
-from app.domain.value_objects.enums import TipoComprobante, EstadoSincronizacion
+from app.domain.value_objects.enums import TipoComprobante, EstadoSincronizacion, CanalOrigen
 from app.infrastructure.database.models import (
     ComprobanteModel,
     DetalleComprobanteModel,
@@ -57,6 +57,7 @@ def _model_to_entity(m: ComprobanteModel) -> Comprobante:
         total=m.total,
         estado_sincronizacion=EstadoSincronizacion(m.estado_sincronizacion),
         cotizacion_origen_id=m.cotizacion_origen_id,
+        canal=m.canal or CanalOrigen.WEB.value,
         detalles=[_detalle_model_to_entity(d) for d in m.detalles],
         formas_pago=[_forma_pago_model_to_entity(fp) for fp in m.formas_pago],
     )
@@ -93,6 +94,7 @@ class SqlAlchemyComprobanteRepository(ComprobanteRepository):
                 model.total = comprobante.total
                 model.estado_sincronizacion = comprobante.estado_sincronizacion.value
                 model.cotizacion_origen_id = comprobante.cotizacion_origen_id
+                model.canal = comprobante.canal
                 # Borrar detalles y formas de pago viejas
                 for d in model.detalles:
                     self.db.delete(d)
@@ -114,6 +116,7 @@ class SqlAlchemyComprobanteRepository(ComprobanteRepository):
                 total=comprobante.total,
                 estado_sincronizacion=comprobante.estado_sincronizacion.value,
                 cotizacion_origen_id=comprobante.cotizacion_origen_id,
+                canal=comprobante.canal,
             )
             self.db.add(model)
             self.db.flush()
@@ -167,10 +170,10 @@ class SqlAlchemyComprobanteRepository(ComprobanteRepository):
     def list_cotizaciones_pendientes(self) -> list[Comprobante]:
         """Cotizaciones que NO fueron convertidas a factura (cotizacion_origen_id IS NULL para ese tipo)."""
         # Buscamos cotizaciones cuyo ID NO aparece como cotizacion_origen_id en otra factura
-        from sqlalchemy import not_, exists
-        subq = self.db.query(ComprobanteModel.cotizacion_origen_id).filter(
+        from sqlalchemy import select
+        subq = select(ComprobanteModel.cotizacion_origen_id).where(
             ComprobanteModel.cotizacion_origen_id.isnot(None)
-        ).subquery()
+        )
         models = self.db.query(ComprobanteModel).filter(
             ComprobanteModel.tipo == TipoComprobante.COTIZACION.value,
             ~ComprobanteModel.id.in_(subq),

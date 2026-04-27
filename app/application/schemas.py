@@ -17,6 +17,7 @@ from app.domain.value_objects.enums import (
     EstadoCaja,
     EstadoSincronizacion,
     EstadoPedido,
+    CanalOrigen,
 )
 
 
@@ -183,6 +184,7 @@ class ComprobanteRequest(BaseModel):
     vendedor_id: int = 1
     lista_mayorista: bool = False
     descuento_pie: float = 0.0
+    canal: str = CanalOrigen.WEB.value
     detalles: list[DetalleComprobanteRequest]
     formas_pago: list[ComprobanteFormaPagoRequest]
 
@@ -210,6 +212,7 @@ class ComprobanteResponse(BaseModel):
     total: float
     estado_sincronizacion: EstadoSincronizacion
     cotizacion_origen_id: Optional[int] = None
+    canal: str = CanalOrigen.WEB.value
     detalles: list[DetalleComprobanteResponse] = []
     formas_pago: list[ComprobanteFormaPagoResponse] = []
 
