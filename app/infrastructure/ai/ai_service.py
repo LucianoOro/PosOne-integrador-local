@@ -495,7 +495,7 @@ class AIService:
         "convertir_cotizacion": {"cotizacion_id": int, "tipo_factura": str},
         "bloquear_articulo": {"codigo": str},
         "desbloquear_articulo": {"codigo": str},
-        "ver_comprobante": {"comprobante_id": int},
+        "ver_comprobante": {},  # comprobante_id is optional now
         "listar_comprobantes": {"caja_id": int},
     }
 
@@ -973,8 +973,35 @@ class AIService:
 
     def _ver_comprobante(self, args: dict, db) -> dict:
         comprobante_id = args.get("comprobante_id")
+        
+        # Si no se proporciona ID, buscar la última factura de la caja actual
         if not comprobante_id:
-            return {"error": True, "mensaje": "Se requiere comprobante_id."}
+            try:
+                caja_uc = CajaUseCase(SqlAlchemyCajaRepository(db), SqlAlchemyVendedorRepository(db))
+                caja = caja_uc.get_abierta()
+                comp_uc = ComprobanteUseCase(
+                    repo=SqlAlchemyComprobanteRepository(db),
+                    caja_repo=SqlAlchemyCajaRepository(db),
+                    articulo_repo=SqlAlchemyArticuloRepository(db),
+                    cliente_repo=SqlAlchemyClienteRepository(db),
+                    vendedor_repo=SqlAlchemyVendedorRepository(db),
+                    forma_pago_repo=SqlAlchemyFormaPagoRepository(db),
+                )
+                comprobantes = comp_uc.listar_por_caja(caja.id)
+                facturas = [c for c in comprobantes if c.es_factura]
+                if facturas:
+                    # Tomar la factura más reciente (primera, ya que listar_por_caja ordena por ID desc)
+                    comprobante_id = facturas[0].id
+                else:
+                    return {"error": True, "mensaje": "No hay facturas en la caja actual. Indicá el número de comprobante que querés ver."}
+            except Exception:
+                # No hay caja abierta — buscar el comprobante más reciente
+                comp_repo = SqlAlchemyComprobanteRepository(db)
+                all_comps = comp_repo.list_by_tipo(TipoComprobante.FACTURA_B)
+                if all_comps:
+                    comprobante_id = all_comps[0].id  # Más reciente (order desc)
+                else:
+                    return {"error": True, "mensaje": "No hay facturas. Indicá el número de comprobante que querés ver."}
 
         uc = ComprobanteUseCase(
             repo=SqlAlchemyComprobanteRepository(db),

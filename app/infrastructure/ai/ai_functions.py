@@ -57,7 +57,7 @@ SYSTEM_MESSAGE = (
     "- Abrir caja → abrir_caja(saldo_inicial, vendedor_id)\n"
     "- Cerrar caja → cerrar_caja(diferencia)\n"
     "- Facturas/comprobantes → listar_comprobantes(tipo, caja_id)\n"
-    "- Detalle de un comprobante → ver_comprobante(comprobante_id)\n"
+    "- Detalle de un comprobante → ver_comprobante(comprobante_id) — si no hay ID, muestra la última factura\n"
     "- Facturas de la caja actual → listar_facturas_caja()\n"
     "- Qué se vendió hoy → listar_facturas_caja()\n"
     "- Generar cotización → generar_cotizacion(cliente_id, items)\n"
@@ -66,8 +66,8 @@ SYSTEM_MESSAGE = (
     "- Desbloquear artículo → desbloquear_articulo(codigo)\n\n"
     "### INTERPRETACIÓN DE INTENCIÓN DEL USUARIO\n"
     "Cuando el usuario dice frases como estas, INTERPRETÁ la intención y llamá la función correcta:\n"
-    "- 'mandame la factura', 'dame la factura', 'mostrame la factura' → ver_comprobante(comprobante_id)\n"
-    "- 'ver factura', 'ver comprobante', 'detalle de factura' → ver_comprobante(comprobante_id)\n"
+    "- 'mandame la factura', 'dame la factura', 'mostrame la factura' → ver_comprobante() — sin ID, muestra la última factura\n"
+    "- 'ver factura', 'ver comprobante', 'detalle de factura' → ver_comprobante() o ver_comprobante(comprobante_id) si tiene el ID\n"
     "- 'convertí las cotizaciones', 'pasá a factura' → convertir_cotizacion(cotizacion_id, tipo_factura)\n"
     "- 'cliente 4' o 'ID 4' → Si el usuario menciona un número como ID de cliente, usá cliente_id directamente en generar_cotizacion o cotizaciones_pendientes\n"
     "- 'buscá bicicletas' o 'hay bicicletas' → buscar_articulos(query='bicicleta') — la búsqueda normaliza plurales\n"
@@ -369,17 +369,17 @@ def get_tools() -> list[dict]:
                 "name": "ver_comprobante",
                 "description": (
                     "Obtiene el detalle completo de un comprobante (factura o cotización) por su ID. "
-                    "Muestra items, formas de pago, totales, cliente, etc."
+                    "Si no se proporciona ID, muestra la última factura de la caja actual. "
+                    "Usá esta función cuando el usuario pida ver, mandar, mostrar o consultar una factura o comprobante."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "comprobante_id": {
                             "type": "integer",
-                            "description": "ID del comprobante a consultar",
+                            "description": "ID del comprobante a consultar. Si no se especifica, se muestra la última factura de la caja actual.",
                         },
                     },
-                    "required": ["comprobante_id"],
                 },
             },
         },
