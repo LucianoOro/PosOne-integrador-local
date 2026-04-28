@@ -655,7 +655,16 @@ class AIService:
     def _buscar_clientes(self, args: dict, db) -> dict:
         uc = ClienteUseCase(SqlAlchemyClienteRepository(db))
         query = args.get("query", "")
+        
+        # Si la query es un número, buscar por ID directamente también
         clientes = uc.search(query)
+        
+        # Si no encontramos por texto y la query es un número, buscar por ID
+        if not clientes and query.strip().isdigit():
+            cliente_repo = SqlAlchemyClienteRepository(db)
+            cliente = cliente_repo.get_by_id(int(query.strip()))
+            if cliente:
+                clientes = [cliente]
 
         if not clientes:
             return {"resultados": [], "mensaje": f"No encontré clientes para '{query}'."}
@@ -785,6 +794,49 @@ class AIService:
         if not items:
             return {"error": True, "mensaje": "Se requiere al menos un item."}
 
+        # Resolver códigos de artículo: si el código no existe, buscar por nombre
+        articulo_repo = SqlAlchemyArticuloRepository(db)
+        resolved_items = []
+        for item in items:
+            codigo = item.get("codigo", "")
+            cantidad = int(item.get("cantidad", 1))
+
+            # Verificar si el código existe directamente
+            articulo = articulo_repo.get_by_codigo(codigo)
+            if articulo:
+                resolved_items.append(DetalleComprobante(
+                    articulo_codigo=codigo,
+                    cantidad=cantidad,
+                ))
+                continue
+
+            # Si no existe, buscar por nombre/descripción
+            resultados = articulo_repo.search(codigo)
+            if resultados:
+                # Tomar el primer resultado
+                resolved_items.append(DetalleComprobante(
+                    articulo_codigo=resultados[0].codigo,
+                    cantidad=cantidad,
+                ))
+            else:
+                # Último intento: normalizar plurales
+                from app.infrastructure.database.repositories.articulo_repo import _normalize_search_query
+                normalized = _normalize_search_query(codigo)
+                resultados_norm = articulo_repo.search(normalized)
+                if resultados_norm:
+                    resolved_items.append(DetalleComprobante(
+                        articulo_codigo=resultados_norm[0].codigo,
+                        cantidad=cantidad,
+                    ))
+                else:
+                    return {
+                        "error": True,
+                        "mensaje": f"No encontré el artículo '{codigo}'. Probá con el código (ej: BIC-001) o un nombre más específico.",
+                    }
+
+        if not resolved_items:
+            return {"error": True, "mensaje": "No se pudieron resolver los artículos de la cotización."}
+
         uc = ComprobanteUseCase(
             repo=SqlAlchemyComprobanteRepository(db),
             caja_repo=SqlAlchemyCajaRepository(db),
@@ -794,13 +846,6 @@ class AIService:
             forma_pago_repo=SqlAlchemyFormaPagoRepository(db),
         )
 
-        detalles = []
-        for item in items:
-            detalles.append(DetalleComprobante(
-                articulo_codigo=item.get("codigo", ""),
-                cantidad=int(item.get("cantidad", 1)),
-            ))
-
         cotizacion = Comprobante(
             tipo=TipoComprobante.COTIZACION,
             cliente_id=int(cliente_id),
@@ -808,7 +853,7 @@ class AIService:
             lista_mayorista=False,
             consumidor_final=(int(cliente_id) == 1),
             canal="WHATSAPP",
-            detalles=detalles,
+            detalles=resolved_items,
             formas_pago=[],
         )
 
@@ -1097,7 +1142,7 @@ class AIService:
             "fecha_apertura": caja.fecha_apertura.isoformat() if caja.fecha_apertura else None,
             "total_facturas": len(facturas),
 "total_facturado": total_facturado,
-            "facturas": facturas_data,
+            "facturas": resultados,
         }
 
     def _enviar_pdf_comprobante(self, args: dict, db) -> dict:
