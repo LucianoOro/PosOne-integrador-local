@@ -6,6 +6,7 @@ WhatsApp → MessageProcessor → AIService → (function call) → UseCase → 
 
 import logging
 import os
+from collections import defaultdict
 
 from app.infrastructure.ai.ai_service import AIService, AIResult
 from app.infrastructure.database.connection import SessionLocal
@@ -31,6 +32,28 @@ from app.infrastructure.whatsapp.twilio_service import TwilioService
 from app.infrastructure.whatsapp.fallback_processor import FallbackProcessor
 
 logger = logging.getLogger(__name__)
+
+# ─── Conversation History Store ─────────────────────────────────────
+# Almacena los últimos N mensajes por número de teléfono para dar contexto
+# a la IA. Esto permite que la IA entienda referencias como "esa cotización"
+# o "convertila en factura".
+
+MAX_HISTORY_PER_USER = 10  # Últimos 10 mensajes (5 pares user/assistant)
+_conversation_history: dict[str, list[dict]] = defaultdict(list)
+
+
+def _add_to_history(phone_number: str, role: str, text: str) -> None:
+    """Agrega un mensaje al historial de conversación."""
+    history = _conversation_history[phone_number]
+    history.append({"role": role, "text": text})
+    # Mantener solo los últimos N mensajes
+    if len(history) > MAX_HISTORY_PER_USER:
+        _conversation_history[phone_number] = history[-MAX_HISTORY_PER_USER:]
+
+
+def _get_history(phone_number: str) -> list[dict]:
+    """Obtiene el historial de conversación para un número."""
+    return _conversation_history.get(phone_number, [])
 
 
 class MessageProcessor:
@@ -68,18 +91,25 @@ class MessageProcessor:
             logger.info("IA no configurada — usando fallback rule-based")
             response_text = self.fallback.process(message_body)
             self._send_text(from_number, response_text)
+            _add_to_history(from_number, "assistant", response_text)
             return response_text
 
         try:
-            result = self.ai.process_message(from_number, message_body)
+            # Pasar historial de conversación como contexto
+            context = {"history": _get_history(from_number)} if _get_history(from_number) else None
+            result = self.ai.process_message(from_number, message_body, context=context)
         except Exception as e:
             error_msg = str(e)
             logger.warning("Error en IA, usando fallback: %s", error_msg[:100])
             response_text = self.fallback.process(message_body)
             self._send_text(from_number, response_text)
+            _add_to_history(from_number, "user", message_body)
+            _add_to_history(from_number, "assistant", response_text)
             return response_text
 
-        # 2. Enviar respuesta de texto
+        # 2. Guardar en historial y enviar respuesta de texto
+        _add_to_history(from_number, "user", message_body)
+        _add_to_history(from_number, "assistant", result.text)
         self._send_text(from_number, result.text)
 
         # 3. Si se generó una cotización, enviar PDF

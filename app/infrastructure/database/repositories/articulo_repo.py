@@ -1,11 +1,53 @@
 """Implementación SQLAlchemy del repositorio de Artículos."""
 
+import re
+
 from sqlalchemy.orm import Session
 
 from app.application.ports.articulo_repository import ArticuloRepository
 from app.domain.entities.entities import Articulo
 from app.domain.value_objects.enums import InventarioEstado
 from app.infrastructure.database.models import ArticuloModel
+
+
+def _normalize_search_query(query: str) -> str:
+    """Normaliza una query de búsqueda para manejar plurales en español.
+    
+    Remueve terminaciones plurales comunes:
+    - bicicletas → bicicleta
+    - cascos → casco
+    - repuestos → repuesto
+    - guantes → guante
+    - zapatillas → zapatilla
+    
+    También se intenta sin la 's' final como fallback,
+    para cubrir casos como bicicletas→bicicleta.
+    """
+    q = query.strip()
+    # Reglas de plural español (ordenadas de más específicas a menos)
+    rules = [
+        (r'eses$', ''),      # ingresos → ingres (raro)
+        (r'ces$', 'z'),      # luces → luz
+        (r'iones$', 'ión'),   # cotizaciones → cotización
+        (r'eres$', 'er'),     # hombres → hombr (no ideal, raro)
+        (r'ajes$', 'aje'),    # viajes → viaje
+        (r'ones$', 'ón'),     # cotizaciones → cotización (accent)
+        (r'ales$', 'al'),     # formas → forma (no exacto pero cercano)
+        (r'eles$', 'el'),     # cascos → casc (raro)
+        (r'iles$', 'il'),     # civiles → civil
+        (r'ivas$', 'ivo'),    # activas → activo
+        (r'osos$', 'oso'),    # peligrosos → peligroso
+        (r'ls$', 'l'),        # animales → animal (no funciona bien)
+        (r'as$', 'a'),        # bicicletas → bicicleta, cotizas → cotiza
+        (r'es$', ''),         # cascos → casco, repuestos → repuesto
+        (r's$', ''),          # guantes → guante, bicicletas... 
+    ]
+    
+    for pattern, replacement in rules:
+        if re.search(pattern, q, re.IGNORECASE):
+            return re.sub(pattern, replacement, q, count=1, flags=re.IGNORECASE)
+    
+    return q
 
 
 def _model_to_entity(m: ArticuloModel) -> Articulo:
@@ -63,11 +105,31 @@ class SqlAlchemyArticuloRepository(ArticuloRepository):
         return _model_to_entity(m) if m else None
 
     def search_by_descripcion(self, query: str) -> list[Articulo]:
-        models = self.db.query(ArticuloModel).filter(
-            ArticuloModel.descripcion.ilike(f"%{query}%"),
-            ArticuloModel.activo == True,  # noqa: E712
-        ).all()
-        return [_model_to_entity(m) for m in models]
+        """Busca artículos por descripción. Normaliza plurales en español."""
+        normalized = _normalize_search_query(query)
+        like_original = f"%{query}%"
+        like_normalized = f"%{normalized}%"
+        
+        if normalized.lower() == query.lower():
+            models = self.db.query(ArticuloModel).filter(
+                ArticuloModel.descripcion.ilike(like_original),
+                ArticuloModel.activo == True,  # noqa: E712
+            ).all()
+        else:
+            models = self.db.query(ArticuloModel).filter(
+                ArticuloModel.activo == True,  # noqa: E712
+            ).filter(
+                (ArticuloModel.descripcion.ilike(like_original))
+                | (ArticuloModel.descripcion.ilike(like_normalized))
+            ).all()
+        
+        seen = set()
+        unique = []
+        for m in models:
+            if m.codigo not in seen:
+                seen.add(m.codigo)
+                unique.append(m)
+        return [_model_to_entity(m) for m in unique]
 
     def list_all(self, solo_activos: bool = True) -> list[Articulo]:
         q = self.db.query(ArticuloModel)
@@ -105,14 +167,46 @@ class SqlAlchemyArticuloRepository(ArticuloRepository):
             return _model_to_entity(model)
 
     def search(self, query: str) -> list[Articulo]:
-        """Búsqueda flexible: código, código barra, código rápido o descripción."""
+        """Búsqueda flexible: código, código barra, código rápido o descripción.
+        
+        Normaliza plurales en español para mejorar resultados:
+        'bicicletas' → busca 'bicicleta', 'cascos' → busca 'casco', etc.
+        """
         like = f"%{query}%"
-        models = self.db.query(ArticuloModel).filter(
-            ArticuloModel.activo == True,  # noqa: E712
-        ).filter(
-            (ArticuloModel.codigo.ilike(like))
-            | (ArticuloModel.descripcion.ilike(like))
-            | (ArticuloModel.codigo_barra.ilike(like))
-            | (ArticuloModel.codigo_rapido.ilike(like))
-        ).all()
-        return [_model_to_entity(m) for m in models]
+        normalized = _normalize_search_query(query)
+        like_normalized = f"%{normalized}%"
+        
+        # Si la query normalizada es igual a la original, buscar solo una vez
+        if normalized.lower() == query.lower():
+            models = self.db.query(ArticuloModel).filter(
+                ArticuloModel.activo == True,  # noqa: E712
+            ).filter(
+                (ArticuloModel.codigo.ilike(like))
+                | (ArticuloModel.descripcion.ilike(like))
+                | (ArticuloModel.codigo_barra.ilike(like))
+                | (ArticuloModel.codigo_rapido.ilike(like))
+            ).all()
+        else:
+            # Buscar con ambos términos (original y normalizado) para máxima cobertura
+            models = self.db.query(ArticuloModel).filter(
+                ArticuloModel.activo == True,  # noqa: E712
+            ).filter(
+                (ArticuloModel.codigo.ilike(like))
+                | (ArticuloModel.descripcion.ilike(like))
+                | (ArticuloModel.codigo_barra.ilike(like))
+                | (ArticuloModel.codigo_rapido.ilike(like))
+                | (ArticuloModel.codigo.ilike(like_normalized))
+                | (ArticuloModel.descripcion.ilike(like_normalized))
+                | (ArticuloModel.codigo_barra.ilike(like_normalized))
+                | (ArticuloModel.codigo_rapido.ilike(like_normalized))
+            ).all()
+        
+        # Deduplicar por código
+        seen = set()
+        unique = []
+        for m in models:
+            if m.codigo not in seen:
+                seen.add(m.codigo)
+                unique.append(m)
+        
+        return [_model_to_entity(m) for m in unique]

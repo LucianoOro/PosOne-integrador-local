@@ -105,13 +105,22 @@ def chat_with_ai(request: ChatRequest):
     Este endpoint procesa el mensaje a través de IA con function calling,
     igual que lo haría el webhook de WhatsApp, pero vía API directa.
     Si la IA no está configurada o falla, usa fallback rule-based.
+    
+    Mantiene historial de conversación por número de teléfono para contexto.
     """
+    from app.infrastructure.whatsapp.message_processor import _add_to_history, _get_history
+    
     ai = AIService()
 
     # Intentar con IA primero
     if ai.is_configured:
         try:
-            result = ai.process_message(request.phone_number, request.message)
+            # Pasar historial de conversación como contexto
+            context = {"history": _get_history(request.phone_number)} if _get_history(request.phone_number) else None
+            result = ai.process_message(request.phone_number, request.message, context=context)
+            # Guardar en historial
+            _add_to_history(request.phone_number, "user", request.message)
+            _add_to_history(request.phone_number, "assistant", result.text)
             return {
                 "response": result.text,
                 "cotizacion_id": result.cotizacion_id,
@@ -125,6 +134,8 @@ def chat_with_ai(request: ChatRequest):
             from app.infrastructure.whatsapp.fallback_processor import FallbackProcessor
             fallback = FallbackProcessor()
             response_text = fallback.process(request.message)
+            _add_to_history(request.phone_number, "user", request.message)
+            _add_to_history(request.phone_number, "assistant", response_text)
             return {
                 "response": response_text,
                 "cotizacion_id": None,
@@ -137,6 +148,8 @@ def chat_with_ai(request: ChatRequest):
     from app.infrastructure.whatsapp.fallback_processor import FallbackProcessor
     fallback = FallbackProcessor()
     response_text = fallback.process(request.message)
+    _add_to_history(request.phone_number, "user", request.message)
+    _add_to_history(request.phone_number, "assistant", response_text)
     return {
         "response": response_text,
         "cotizacion_id": None,
