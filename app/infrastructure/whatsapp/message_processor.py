@@ -112,9 +112,11 @@ class MessageProcessor:
         _add_to_history(from_number, "assistant", result.text)
         self._send_text(from_number, result.text)
 
-        # 3. Si se generó una cotización, enviar PDF
+        # 3. Si se generó una cotización o se pidió un comprobante, enviar PDF
         if result.cotizacion_id:
-            self._send_cotizacion_pdf(from_number, result.cotizacion_id)
+            self._send_comprobante_pdf(from_number, result.cotizacion_id)
+        elif result.comprobante_id:
+            self._send_comprobante_pdf(from_number, result.comprobante_id)
 
         return result.text
 
@@ -122,20 +124,21 @@ class MessageProcessor:
         """Envía un mensaje de texto vía Twilio."""
         self.twilio.send_message(to, text)
 
-    def _send_cotizacion_pdf(self, to: str, cotizacion_id: int) -> None:
-        """Genera y envía el PDF de una cotización vía Twilio."""
+    def _send_comprobante_pdf(self, to: str, comprobante_id: int) -> None:
+        """Genera y envía el PDF de un comprobante (factura o cotización) vía Twilio."""
         db = SessionLocal()
         try:
             uc = self._get_comprobante_use_case(db)
-            comp = uc.get_by_id(cotizacion_id)
+            comp = uc.get_by_id(comprobante_id)
             nombres = self._resolve_nombres(comp, db)
 
             # Generar PDF
             pdf_service = ComprobantePDFService()
             pdf_bytes = pdf_service.generar_pdf(comp, nombres)
 
-            filename = f"COTIZACION_{comp.punto_venta:04d}-{comp.numero:08d}.pdf"
-            caption = f"Cotización N° {comp.punto_venta:04d}-{comp.numero:08d}"
+            tipo_str = "COTIZACION" if comp.tipo.value == "COTIZACION" else comp.tipo.value
+            filename = f"{tipo_str}_{comp.punto_venta:04d}-{comp.numero:08d}.pdf"
+            caption = f"{'Cotización' if comp.tipo.value == 'COTIZACION' else 'Factura'} N° {comp.punto_venta:04d}-{comp.numero:08d}"
 
             # Construir URL del PDF si APP_BASE_URL está configurado
             base_url = os.environ.get("APP_BASE_URL", "")

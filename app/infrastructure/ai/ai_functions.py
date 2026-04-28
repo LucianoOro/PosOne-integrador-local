@@ -58,6 +58,7 @@ SYSTEM_MESSAGE = (
     "- Cerrar caja → cerrar_caja(diferencia)\n"
     "- Facturas/comprobantes → listar_comprobantes(tipo, caja_id)\n"
     "- Detalle de un comprobante → ver_comprobante(comprobante_id) — si no hay ID, muestra la última factura\n"
+    "- Enviar PDF de factura/cotización → enviar_pdf_comprobante(comprobante_id) — 'mandame el PDF', 'dámela en PDF', 'enviá el comprobante'\n"
     "- Facturas de la caja actual → listar_facturas_caja()\n"
     "- Qué se vendió hoy → listar_facturas_caja()\n"
     "- Generar cotización → generar_cotizacion(cliente_id, items)\n"
@@ -68,6 +69,8 @@ SYSTEM_MESSAGE = (
     "Cuando el usuario dice frases como estas, INTERPRETÁ la intención y llamá la función correcta:\n"
     "- 'mandame la factura', 'dame la factura', 'mostrame la factura' → ver_comprobante() — sin ID, muestra la última factura\n"
     "- 'ver factura', 'ver comprobante', 'detalle de factura' → ver_comprobante() o ver_comprobante(comprobante_id) si tiene el ID\n"
+    "- 'dámela en PDF', 'mandame el PDF', 'enviá el comprobante' → enviar_pdf_comprobante()\n"
+    "- 'PDF de la factura', 'cotización en PDF' → enviar_pdf_comprobante(comprobante_id)\n"
     "- 'convertí las cotizaciones', 'pasá a factura' → convertir_cotizacion(cotizacion_id, tipo_factura)\n"
     "- 'cliente 4' o 'ID 4' → Si el usuario menciona un número como ID de cliente, usá cliente_id directamente en generar_cotizacion o cotizaciones_pendientes\n"
     "- 'buscá bicicletas' o 'hay bicicletas' → buscar_articulos(query='bicicleta') — la búsqueda normaliza plurales\n"
@@ -436,6 +439,26 @@ def get_tools() -> list[dict]:
                         "diferencia": {
                             "type": "number",
                             "description": "Diferencia entre el saldo esperado y el real. Por defecto 0.",
+                        },
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "enviar_pdf_comprobante",
+                "description": (
+                    "Envía el PDF de un comprobante (factura o cotización) por WhatsApp. "
+                    "Úsalo cuando el usuario pida enviar, descargar o recibir un comprobante en PDF. "
+                    "Si no se proporciona ID, envía el último comprobante generado o visto."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "comprobante_id": {
+                            "type": "integer",
+                            "description": "ID del comprobante a enviar en PDF. Si no se especifica, envía el último.",
                         },
                     },
                 },

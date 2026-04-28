@@ -561,6 +561,7 @@ class AIService:
             "listar_comprobantes": self._listar_comprobantes,
             "ver_comprobante": self._ver_comprobante,
             "listar_facturas_caja": self._listar_facturas_caja,
+            "enviar_pdf_comprobante": self._enviar_pdf_comprobante,
         }
 
         handler = dispatchers.get(function_name)
@@ -1042,6 +1043,7 @@ class AIService:
 
         return {
             "id": c.id,
+            "comprobante_id": c.id,  # Side effect: enviar PDF del comprobante
             "tipo": c.tipo.value,
             "numero": f"{c.punto_venta:04d}-{c.numero:08d}",
             "fecha": c.fecha.isoformat() if c.fecha else None,
@@ -1094,6 +1096,61 @@ class AIService:
             "caja_id": caja.id,
             "fecha_apertura": caja.fecha_apertura.isoformat() if caja.fecha_apertura else None,
             "total_facturas": len(facturas),
-            "total_facturado": total_facturado,
-            "facturas": resultados,
+"total_facturado": total_facturado,
+            "facturas": facturas_data,
+        }
+
+    def _enviar_pdf_comprobante(self, args: dict, db) -> dict:
+        """Envía el PDF de un comprobante. Si no se especifica ID, usa el último."""
+        comprobante_id = args.get("comprobante_id")
+
+        if not comprobante_id:
+            # Sin ID: buscar el último comprobante de la caja actual
+            try:
+                caja_uc = CajaUseCase(SqlAlchemyCajaRepository(db), SqlAlchemyVendedorRepository(db))
+                caja = caja_uc.get_abierta()
+                comp_uc = ComprobanteUseCase(
+                    repo=SqlAlchemyComprobanteRepository(db),
+                    caja_repo=SqlAlchemyCajaRepository(db),
+                    articulo_repo=SqlAlchemyArticuloRepository(db),
+                    cliente_repo=SqlAlchemyClienteRepository(db),
+                    vendedor_repo=SqlAlchemyVendedorRepository(db),
+                    forma_pago_repo=SqlAlchemyFormaPagoRepository(db),
+                )
+                comprobantes = comp_uc.listar_por_caja(caja.id)
+                if comprobantes:
+                    comprobante_id = comprobantes[0].id  # Más reciente
+                else:
+                    return {"error": True, "mensaje": "No hay comprobantes en la caja actual."}
+            except Exception:
+                # No hay caja abierta
+                comp_repo = SqlAlchemyComprobanteRepository(db)
+                all_comps = comp_repo.list_by_tipo(TipoComprobante.FACTURA_B)
+                if all_comps:
+                    comprobante_id = all_comps[0].id
+                else:
+                    return {"error": True, "mensaje": "No hay comprobantes para enviar."}
+
+        uc = ComprobanteUseCase(
+            repo=SqlAlchemyComprobanteRepository(db),
+            caja_repo=SqlAlchemyCajaRepository(db),
+            articulo_repo=SqlAlchemyArticuloRepository(db),
+            cliente_repo=SqlAlchemyClienteRepository(db),
+            vendedor_repo=SqlAlchemyVendedorRepository(db),
+            forma_pago_repo=SqlAlchemyFormaPagoRepository(db),
+        )
+
+        try:
+            c = uc.get_by_id(comprobante_id)
+        except Exception as e:
+            return {"error": True, "mensaje": f"Comprobante no encontrado: {str(e)}"}
+
+        tipo_str = "cotización" if c.tipo.value == "COTIZACION" else "factura"
+        return {
+            "comprobante_id": c.id,
+            "tipo": c.tipo.value,
+            "numero": f"{c.punto_venta:04d}-{c.numero:08d}",
+            "cliente": SqlAlchemyClienteRepository(db).get_by_id(c.cliente_id).razon_social if SqlAlchemyClienteRepository(db).get_by_id(c.cliente_id) else "Desconocido",
+            "total": c.total,
+            "mensaje": f"Enviando PDF de la {tipo_str} N° {c.punto_venta:04d}-{c.numero:08d}.",
         }
