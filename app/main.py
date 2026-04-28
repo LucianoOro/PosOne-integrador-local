@@ -15,6 +15,8 @@ from fastapi.responses import JSONResponse
 
 from app.domain.exceptions import PosOneError
 from app.infrastructure.database.connection import SessionLocal, create_tables
+from app.infrastructure.database.models import Base
+from app.infrastructure.database.connection import engine
 from app.infrastructure.database.seed import seed_database
 from app.infrastructure.api.routers.health_router import router as health_router
 from app.infrastructure.api.routers.articulos_router import router as articulos_router
@@ -62,11 +64,30 @@ def _validate_env_vars() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: crea tablas, pobla datos iniciales y valida env vars."""
+    """Startup: crea tablas, pobla datos iniciales y valida env vars.
+    
+    Si DEMO_MODE=true, reseetea la DB en cada inicio (drop + create + seed).
+    Esto garantiza datos limpios para demostraciones.
+    """
+    demo_mode = os.environ.get("DEMO_MODE", "false").lower() == "true"
+    
+    if demo_mode:
+        logger.info("🔄 DEMO_MODE activado — reseeteando base de datos...")
+        Base.metadata.drop_all(bind=engine)
+        logger.info("✅ Tablas eliminadas")
+    
     create_tables()
+    
     db = SessionLocal()
     try:
-        seed_database(db)
+        if demo_mode:
+            # En demo mode, siempre seedear (la DB está vacía después del drop)
+            seed_database(db)
+            db.commit()
+            logger.info("✅ Base de datos populated con datos de demo")
+        else:
+            # En modo normal, solo seedear si está vacía
+            seed_database(db)
     finally:
         db.close()
     _validate_env_vars()
