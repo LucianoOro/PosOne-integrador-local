@@ -61,6 +61,7 @@ SYSTEM_MESSAGE = (
     "- Enviar PDF de factura/cotización → enviar_pdf_comprobante(comprobante_id) — 'mandame el PDF', 'dámela en PDF', 'enviá el comprobante'\n"
     "- Facturas de la caja actual → listar_facturas_caja()\n"
     "- Qué se vendió hoy → listar_facturas_caja()\n"
+    "- Qué se facturó hoy, facturación del día → listar_facturas_caja()\n"
     "- Generar cotización → generar_cotizacion(cliente_id, items)\n"
     "- Convertir cotización a factura → convertir_cotizacion(cotizacion_id, tipo_factura)\n"
     "- Bloquear artículo → bloquear_articulo(codigo)\n"
@@ -71,6 +72,7 @@ SYSTEM_MESSAGE = (
     "- 'ver factura', 'ver comprobante', 'detalle de factura' → ver_comprobante() o ver_comprobante(comprobante_id) si tiene el ID\n"
     "- 'dámela en PDF', 'mandame el PDF', 'enviá el comprobante' → enviar_pdf_comprobante()\n"
     "- 'PDF de la factura', 'cotización en PDF' → enviar_pdf_comprobante(comprobante_id)\n"
+    "- 'qué se facturó hoy', 'qué se vendió hoy', 'facturación del día' → listar_facturas_caja() — NO usar buscar_articulos\n"
     "- 'convertí las cotizaciones', 'pasá a factura' → convertir_cotizacion(cotizacion_id, tipo_factura)\n"
     "- 'cliente 4' o 'ID 4' → Si el usuario menciona un número como ID de cliente, usá cliente_id directamente en generar_cotizacion o cotizaciones_pendientes\n"
     "- 'buscá bicicletas' o 'hay bicicletas' → buscar_articulos(query='bicicleta') — la búsqueda normaliza plurales\n"
@@ -392,7 +394,9 @@ def get_tools() -> list[dict]:
                 "name": "listar_facturas_caja",
                 "description": (
                     "Lista todas las facturas de la caja abierta actual. "
-                    "Útil para saber qué se vendió en la jornada y hacer cierre de caja."
+                    "Úsalo cuando el usuario pregunta qué se facturó hoy, qué se vendió, "
+                    "cuánto se facturó, o quiere ver las facturas del día. "
+                    "NO uses buscar_articulos para estas consultas."
                 ),
                 "parameters": {
                     "type": "object",
