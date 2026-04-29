@@ -16,3 +16,4 @@ test_groq_models.py
 # Documentación del agente IA (no se sube al repo)
 DOCUMENTACION_AGENTE_BACKEND.md
 GUIA_SETUP.md
+demo-manager.sh
