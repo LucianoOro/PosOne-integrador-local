@@ -18,7 +18,7 @@ posone-integrador-local/
 │   └── infrastructure/         # Adaptadores externos
 │       ├── ai/                  # Servicio de IA multi-provider
 │       │   ├── ai_service.py    # AIService: OpenAI/GitHub Models/Groq con fallback
-│       │   └── ai_functions.py  # 16 tool declarations + system prompt
+│       │   └── ai_functions.py  # 17 tool declarations + system prompt
 │       ├── api/                 # FastAPI routers
 │       │   └── routers/         # Articulos, Clientes, Cajas, Comprobantes, WhatsApp
 │       ├── database/            # SQLAlchemy models, repos, seed data, connection
@@ -40,7 +40,7 @@ posone-integrador-local/
 
 ### Bot de WhatsApp con IA
 
-16 funciones que el modelo de IA selecciona dinámicamente vía function calling:
+17 funciones que el modelo de IA selecciona dinámicamente vía function calling:
 
 | Función | Descripción |
 |---------|-------------|
@@ -57,6 +57,7 @@ posone-integrador-local/
 | `cerrar_caja` | Cerrar la caja actual |
 | `listar_comprobantes` | Lista por tipo o por caja |
 | `ver_comprobante` | Detalle completo de un comprobante |
+| `enviar_pdf_comprobante` | Enviar PDF de factura o cotización |
 | `listar_facturas_caja` | Facturas de la caja abierta |
 | `bloquear_articulo` | Bloqueo de emergencia |
 | `desbloquear_articulo` | Restaurar artículo |
